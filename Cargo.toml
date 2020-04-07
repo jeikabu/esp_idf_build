@@ -1,0 +1,13 @@
+[package]
+name = "esp_idf_build"
+version = "0.1.0"
+authors = ["jeikabu <jeikabu@users.noreply.github.com>"]
+edition = "2018"
+
+description = "Build scripts helpful when working with ESP-IDF"
+license = "MIT"
+homepage = "https://github.com/jeikabu/esp_idf_build/"
+repository = "https://github.com/jeikabu/esp_idf_build/"
+keywords = ["esp-idf"]
+categories = ["embedded", "no-std"]
+readme = "README.md"
