@@ -1,0 +1,1 @@
+Helper functions for `build.rs` build scripts when using [esp-idf-sys](https://github.com/sapir/esp-idf-sys).
