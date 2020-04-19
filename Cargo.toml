@@ -1,6 +1,6 @@
 [package]
 name = "esp_idf_build"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["jeikabu <jeikabu@users.noreply.github.com>"]
 edition = "2018"
 
@@ -12,5 +12,12 @@ keywords = ["esp-idf"]
 categories = ["embedded", "no-std"]
 readme = "README.md"
 
+[features]
+default = ["build_idf"]
+build_idf = [] # `build_native()` runs `idf.py build`
+build_make = [] # `build_native()` runs `make`
+
 [dependencies]
 glob = "0.3"
+#TODO: seems indicatif cannot display from build.rs?
+#indicatif = "0.14"

@@ -1,13 +1,59 @@
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, process, sync::mpsc, thread, time};
+
+/// Runs make/cmake to ensure native components are built.
+/// Even once built this will add a few seconds to your build time.
+pub fn build_native() -> std::thread::Result<()> {
+    let start = time::Instant::now();
+    //let spinner = indicatif::ProgressBar::new_spinner();
+    let (tx, rx) = mpsc::sync_channel(1);
+    let make = thread::spawn(move || {
+        let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+        if cfg!(feature = "build_idf") {
+            process::Command::new("idf.py")
+                .arg("build")
+                .current_dir(&std::path::Path::new(&manifest_dir))
+                .status()
+                .unwrap();
+        } else if cfg!(feature = "build_make") {
+            process::Command::new("make")
+                .current_dir(&std::path::Path::new(&manifest_dir))
+                .status()
+                .unwrap();
+        } else {
+            println!("cargo:warning=No build feature enabled.  Build skipped.");
+        }
+
+        tx.send(()).unwrap();
+    });
+    loop {
+        match rx.try_recv() {
+            Err(mpsc::TryRecvError::Disconnected) | Ok(_) => break,
+            Err(mpsc::TryRecvError::Empty) => {}
+        }
+        // NOTE: no point in printing anything because it's buffered and no way to flush it.
+        //println!("cargo:warning=Building...");
+        //spinner.tick();
+        std::thread::sleep_ms(1000);
+    }
+    let ret = make.join();
+    //spinner.finish();
+    println!("cargo:warning=Build time {:?}", start.elapsed());
+    ret
+}
 
 /// Add ESP-IDF native library search paths to rustc.
 pub fn print_link_search() {
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     if target_arch == "xtensa" {
-        let esp_idf = PathBuf::from(env::var("IDF_PATH").expect("IDF_PATH environment variable must be set"));
+        let esp_idf =
+            PathBuf::from(env::var("IDF_PATH").expect("IDF_PATH environment variable must be set"));
         // Folder containing `build/` output after running `make menuconfig && make`
         let build_subdir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("build");
-        if glob::glob(&build_subdir.join("*.bin").to_string_lossy()).unwrap().next().is_none() {
+        if glob::glob(&build_subdir.join("*.bin").to_string_lossy())
+            .unwrap()
+            .next()
+            .is_none()
+        {
             panic!("No .bin files, did you run `make menuconfig && make`?");
         }
 
@@ -91,7 +137,7 @@ pub fn print_link_search() {
     }
 }
 
-/// Writes script file that uses esptool.py to create an application image from 
+/// Writes script file that uses esptool.py to create an application image from
 /// the Rust ELF.
 pub fn esptool_write_script() -> std::io::Result<()> {
     use std::io::Write;
@@ -102,13 +148,16 @@ pub fn esptool_write_script() -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let perms = std::fs::Permissions::from_mode(0o744);
     file.set_permissions(perms)?;
-
-    let cmd = format!(r#""$IDF_PATH/components/esptool_py/esptool/esptool.py" \
+    let cmd = format!(
+        r#""$IDF_PATH/components/esptool_py/esptool/esptool.py" \
     --chip esp32 \
     elf2image \
     -o build/esp-app.bin \
     target/{}/{}/{}"#,
-    env::var("TARGET").unwrap(), env::var("PROFILE").unwrap(), env::var("CARGO_PKG_NAME").unwrap());
+        env::var("TARGET").unwrap(),
+        env::var("PROFILE").unwrap(),
+        env::var("CARGO_PKG_NAME").unwrap()
+    );
 
     // Write script with she-bang (#!)
     write!(file, "#!/usr/bin/env bash\n\n{}", cmd)
